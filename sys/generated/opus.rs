@@ -78,59 +78,10 @@ pub type opus_int32 = ::std::os::raw::c_int;
 pub type opus_uint32 = ::std::os::raw::c_uint;
 pub type opus_int16 = ::std::os::raw::c_short;
 pub type opus_uint16 = ::std::os::raw::c_ushort;
-unsafe extern "C" {
-    pub fn opus_strerror(error: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
-}
-unsafe extern "C" {
-    pub fn opus_get_version_string() -> *const ::std::os::raw::c_char;
-}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct OpusEncoder {
     _unused: [u8; 0],
-}
-unsafe extern "C" {
-    pub fn opus_encoder_get_size(channels: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    pub fn opus_encoder_create(
-        Fs: opus_int32,
-        channels: ::std::os::raw::c_int,
-        application: ::std::os::raw::c_int,
-        error: *mut ::std::os::raw::c_int,
-    ) -> *mut OpusEncoder;
-}
-unsafe extern "C" {
-    pub fn opus_encoder_init(
-        st: *mut OpusEncoder,
-        Fs: opus_int32,
-        channels: ::std::os::raw::c_int,
-        application: ::std::os::raw::c_int,
-    ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
-    pub fn opus_encode(
-        st: *mut OpusEncoder,
-        pcm: *const opus_int16,
-        frame_size: ::std::os::raw::c_int,
-        data: *mut ::std::os::raw::c_uchar,
-        max_data_bytes: opus_int32,
-    ) -> opus_int32;
-}
-unsafe extern "C" {
-    pub fn opus_encode_float(
-        st: *mut OpusEncoder,
-        pcm: *const f32,
-        frame_size: ::std::os::raw::c_int,
-        data: *mut ::std::os::raw::c_uchar,
-        max_data_bytes: opus_int32,
-    ) -> opus_int32;
-}
-unsafe extern "C" {
-    pub fn opus_encoder_destroy(st: *mut OpusEncoder);
-}
-unsafe extern "C" {
-    pub fn opus_encoder_ctl(st: *mut OpusEncoder, request: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -147,16 +98,46 @@ pub struct OpusDREDDecoder {
 pub struct OpusDRED {
     _unused: [u8; 0],
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct OpusRepacketizer {
+    _unused: [u8; 0],
+}
 unsafe extern "C" {
+    pub fn opus_strerror(error: ::std::os::raw::c_int) -> *const ::std::os::raw::c_char;
+    pub fn opus_get_version_string() -> *const ::std::os::raw::c_char;
+    pub fn opus_encoder_get_size(channels: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+    pub fn opus_encoder_create(
+        Fs: opus_int32,
+        channels: ::std::os::raw::c_int,
+        application: ::std::os::raw::c_int,
+        error: *mut ::std::os::raw::c_int,
+    ) -> *mut OpusEncoder;
+    pub fn opus_encoder_init(
+        st: *mut OpusEncoder,
+        Fs: opus_int32,
+        channels: ::std::os::raw::c_int,
+        application: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+    pub fn opus_encode(
+        st: *mut OpusEncoder,
+        pcm: *const opus_int16,
+        frame_size: ::std::os::raw::c_int,
+        data: *mut ::std::os::raw::c_uchar,
+        max_data_bytes: opus_int32,
+    ) -> opus_int32;
+    pub fn opus_encode_float(
+        st: *mut OpusEncoder,
+        pcm: *const f32,
+        frame_size: ::std::os::raw::c_int,
+        data: *mut ::std::os::raw::c_uchar,
+        max_data_bytes: opus_int32,
+    ) -> opus_int32;
+    pub fn opus_encoder_destroy(st: *mut OpusEncoder);
+    pub fn opus_encoder_ctl(st: *mut OpusEncoder, request: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
     pub fn opus_decoder_get_size(channels: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_create(Fs: opus_int32, channels: ::std::os::raw::c_int, error: *mut ::std::os::raw::c_int) -> *mut OpusDecoder;
-}
-unsafe extern "C" {
     pub fn opus_decoder_init(st: *mut OpusDecoder, Fs: opus_int32, channels: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decode(
         st: *mut OpusDecoder,
         data: *const ::std::os::raw::c_uchar,
@@ -165,8 +146,6 @@ unsafe extern "C" {
         frame_size: ::std::os::raw::c_int,
         decode_fec: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decode_float(
         st: *mut OpusDecoder,
         data: *const ::std::os::raw::c_uchar,
@@ -175,38 +154,16 @@ unsafe extern "C" {
         frame_size: ::std::os::raw::c_int,
         decode_fec: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_ctl(st: *mut OpusDecoder, request: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_destroy(st: *mut OpusDecoder);
-}
-unsafe extern "C" {
     pub fn opus_dred_decoder_get_size() -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_dred_decoder_create(error: *mut ::std::os::raw::c_int) -> *mut OpusDREDDecoder;
-}
-unsafe extern "C" {
     pub fn opus_dred_decoder_init(dec: *mut OpusDREDDecoder) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_dred_decoder_destroy(dec: *mut OpusDREDDecoder);
-}
-unsafe extern "C" {
     pub fn opus_dred_decoder_ctl(dred_dec: *mut OpusDREDDecoder, request: ::std::os::raw::c_int, ...) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_dred_get_size() -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_dred_alloc(error: *mut ::std::os::raw::c_int) -> *mut OpusDRED;
-}
-unsafe extern "C" {
     pub fn opus_dred_free(dec: *mut OpusDRED);
-}
-unsafe extern "C" {
     pub fn opus_dred_parse(
         dred_dec: *mut OpusDREDDecoder,
         dred: *mut OpusDRED,
@@ -217,11 +174,7 @@ unsafe extern "C" {
         dred_end: *mut ::std::os::raw::c_int,
         defer_processing: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_dred_process(dred_dec: *mut OpusDREDDecoder, src: *const OpusDRED, dst: *mut OpusDRED) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_dred_decode(
         st: *mut OpusDecoder,
         dred: *const OpusDRED,
@@ -229,8 +182,6 @@ unsafe extern "C" {
         pcm: *mut opus_int16,
         frame_size: opus_int32,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_dred_decode_float(
         st: *mut OpusDecoder,
         dred: *const OpusDRED,
@@ -238,8 +189,6 @@ unsafe extern "C" {
         pcm: *mut f32,
         frame_size: opus_int32,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_parse(
         data: *const ::std::os::raw::c_uchar,
         len: opus_int32,
@@ -248,52 +197,19 @@ unsafe extern "C" {
         size: *mut opus_int16,
         payload_offset: *mut ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_get_bandwidth(data: *const ::std::os::raw::c_uchar) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_get_samples_per_frame(data: *const ::std::os::raw::c_uchar, Fs: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_get_nb_channels(data: *const ::std::os::raw::c_uchar) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_get_nb_frames(packet: *const ::std::os::raw::c_uchar, len: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_get_nb_samples(packet: *const ::std::os::raw::c_uchar, len: opus_int32, Fs: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_has_lbrr(packet: *const ::std::os::raw::c_uchar, len: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_decoder_get_nb_samples(dec: *const OpusDecoder, packet: *const ::std::os::raw::c_uchar, len: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_pcm_soft_clip(pcm: *mut f32, frame_size: ::std::os::raw::c_int, channels: ::std::os::raw::c_int, softclip_mem: *mut f32);
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct OpusRepacketizer {
-    _unused: [u8; 0],
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_get_size() -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_init(rp: *mut OpusRepacketizer) -> *mut OpusRepacketizer;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_create() -> *mut OpusRepacketizer;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_destroy(rp: *mut OpusRepacketizer);
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_cat(rp: *mut OpusRepacketizer, data: *const ::std::os::raw::c_uchar, len: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_out_range(
         rp: *mut OpusRepacketizer,
         begin: ::std::os::raw::c_int,
@@ -301,27 +217,15 @@ unsafe extern "C" {
         data: *mut ::std::os::raw::c_uchar,
         maxlen: opus_int32,
     ) -> opus_int32;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_get_nb_frames(rp: *mut OpusRepacketizer) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_repacketizer_out(rp: *mut OpusRepacketizer, data: *mut ::std::os::raw::c_uchar, maxlen: opus_int32) -> opus_int32;
-}
-unsafe extern "C" {
     pub fn opus_packet_pad(data: *mut ::std::os::raw::c_uchar, len: opus_int32, new_len: opus_int32) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_packet_unpad(data: *mut ::std::os::raw::c_uchar, len: opus_int32) -> opus_int32;
-}
-unsafe extern "C" {
     pub fn opus_multistream_packet_pad(
         data: *mut ::std::os::raw::c_uchar,
         len: opus_int32,
         new_len: opus_int32,
         nb_streams: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-unsafe extern "C" {
     pub fn opus_multistream_packet_unpad(data: *mut ::std::os::raw::c_uchar, len: opus_int32, nb_streams: ::std::os::raw::c_int) -> opus_int32;
 }

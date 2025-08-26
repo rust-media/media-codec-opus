@@ -1,5 +1,4 @@
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use bindgen::EnumVariation::Rust;
 use pkg_config::Config;
@@ -14,7 +13,14 @@ fn main() {
     let libs = Config::new().atleast_version("1.5.2").probe("opus").unwrap();
     let headers = libs.include_paths;
 
-    let mut builder = bindgen::builder().header("include/wrapper.h").default_enum_style(Rust { non_exhaustive: false }).generate_comments(false);
+    let mut builder = bindgen::builder()
+        .header("include/wrapper.h")
+        .default_enum_style(Rust {
+            non_exhaustive: false,
+        })
+        .layout_tests(false)
+        .merge_extern_blocks(true)
+        .generate_comments(false);
 
     for header in headers {
         builder = builder.clang_arg("-I").clang_arg(header.to_str().unwrap());
