@@ -1,0 +1,25 @@
+[package]
+name = "media-codec-opus"
+description = "Rust bindings to opus"
+homepage = "https://github.com/rust-media"
+repository = "https://github.com/rust-media/media-codec-opus"
+documentation = "https://docs.rs/media-codec-opus"
+version = "0.1.0"
+authors = ["Zhou Wei <zhouwei@ehom.net>"]
+license = "MIT OR Apache-2.0"
+categories = ["multimedia::audio", "multimedia::encoding"]
+keywords = ["opus"]
+edition = "2021"
+
+[dependencies]
+bytemuck = "1.23"
+ctor = "0.5"
+media-codec = "0.4"
+media-codec-opus-sys = { version = "0.1", path = "sys" }
+media-core = "0.4"
+
+[features]
+docsrs = ["media-codec-opus-sys/docsrs"]
+
+[package.metadata.docs.rs]
+features = ["docsrs"]
