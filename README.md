@@ -8,4 +8,4 @@
 Rust bindings to opus, providing opus codec support for the media-codec framework.
 
 - [x] **Decoder**
-- [ ] **Encoder**
+- [x] **Encoder**
