@@ -1,6 +1,7 @@
 use std::{env, path::PathBuf};
 
 use bindgen::EnumVariation::Rust;
+use bindgen::MacroTypeVariation::Signed;
 use pkg_config::Config;
 
 fn main() {
@@ -18,6 +19,7 @@ fn main() {
         .default_enum_style(Rust {
             non_exhaustive: false,
         })
+        .default_macro_constant_type(Signed)
         .layout_tests(false)
         .merge_extern_blocks(true)
         .generate_comments(false);
