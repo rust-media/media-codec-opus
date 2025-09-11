@@ -27,11 +27,11 @@ unsafe impl Send for OpusDecoder {}
 unsafe impl Sync for OpusDecoder {}
 
 impl Codec<AudioDecoderConfiguration> for OpusDecoder {
-    fn configure(&mut self, _parameters: Option<AudioDecoderParameters>, _options: Option<Variant>) -> Result<()> {
+    fn configure(&mut self, _parameters: Option<&AudioDecoderParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
 
-    fn set_option(&mut self, _key: &str, _value: Variant) -> Result<()> {
+    fn set_option(&mut self, _key: &str, _value: &Variant) -> Result<()> {
         Ok(())
     }
 }
@@ -119,7 +119,7 @@ impl Drop for OpusDecoder {
 }
 
 impl OpusDecoder {
-    pub fn new(codec_id: CodecID, parameters: &AudioDecoderParameters, _options: Option<Variant>) -> Result<Self> {
+    pub fn new(codec_id: CodecID, parameters: &AudioDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
         if codec_id != CodecID::Opus {
             return Err(unsupported_error!(codec_id));
         }
@@ -151,7 +151,7 @@ impl DecoderBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
         &self,
         codec_id: CodecID,
         parameters: &AudioDecoderParameters,
-        options: Option<Variant>,
+        options: Option<&Variant>,
     ) -> Result<Box<dyn Decoder<AudioDecoderConfiguration>>> {
         Ok(Box::new(OpusDecoder::new(codec_id, parameters, options)?))
     }

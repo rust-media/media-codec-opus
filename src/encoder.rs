@@ -75,11 +75,11 @@ unsafe impl Send for OpusEncoder {}
 unsafe impl Sync for OpusEncoder {}
 
 impl Codec<AudioEncoderConfiguration> for OpusEncoder {
-    fn configure(&mut self, _parameters: Option<AudioEncoderParameters>, _options: Option<Variant>) -> Result<()> {
+    fn configure(&mut self, _parameters: Option<&AudioEncoderParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
 
-    fn set_option(&mut self, key: &str, value: Variant) -> Result<()> {
+    fn set_option(&mut self, key: &str, value: &Variant) -> Result<()> {
         let value = value.get_int32().ok_or_else(|| invalid_param_error!(value))?;
 
         match key {
@@ -199,12 +199,12 @@ impl Drop for OpusEncoder {
 }
 
 impl OpusEncoder {
-    pub fn new(codec_id: CodecID, parameters: &AudioEncoderParameters, options: Option<Variant>) -> Result<Self> {
+    pub fn new(codec_id: CodecID, parameters: &AudioEncoderParameters, options: Option<&Variant>) -> Result<Self> {
         if codec_id != CodecID::Opus {
             return Err(unsupported_error!(codec_id));
         }
 
-        let mut opts = OpusOptions::from_variant(options.as_ref());
+        let mut opts = OpusOptions::from_variant(options);
 
         let audio_params = &parameters.audio;
         let sample_format = audio_params.format.ok_or(invalid_param_error!(parameters))?;
@@ -310,7 +310,7 @@ impl EncoderBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
         &self,
         codec_id: CodecID,
         parameters: &AudioEncoderParameters,
-        options: Option<Variant>,
+        options: Option<&Variant>,
     ) -> Result<Box<dyn Encoder<AudioEncoderConfiguration>>> {
         Ok(Box::new(OpusEncoder::new(codec_id, parameters, options)?))
     }
