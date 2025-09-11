@@ -6,6 +6,7 @@ use media_codec::{
     codec::{AudioParameters, Codec, CodecBuilder, CodecID},
     encoder::{register_encoder, AudioEncoderConfiguration, AudioEncoderParameters, Encoder, EncoderBuilder, EncoderParameters},
     packet::Packet,
+    CodecInfomation,
 };
 use media_core::{
     audio::SampleFormat, error::Error, frame::Frame, invalid_param_error, rational::Rational64, unsupported_error, variant::Variant, Result,
@@ -300,10 +301,9 @@ impl OpusEncoder {
     }
 }
 
-pub struct OpusEncoderBuilder {
-    codec_id: CodecID,
-    name: &'static str,
-}
+const CODEC_NAME: &str = "opus-enc";
+
+pub struct OpusEncoderBuilder;
 
 impl EncoderBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
     fn new_encoder(
@@ -318,22 +318,25 @@ impl EncoderBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
 
 impl CodecBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
     fn id(&self) -> CodecID {
-        self.codec_id
+        CodecID::Opus
     }
 
     fn name(&self) -> &'static str {
-        self.name
+        CODEC_NAME
     }
 }
 
-const OPUS_ENCODER_NAME: &str = "opus-enc";
+impl CodecInfomation for OpusEncoder {
+    fn id(&self) -> CodecID {
+        CodecID::Opus
+    }
 
-const OPUS_ENCODER_BUILDER: OpusEncoderBuilder = OpusEncoderBuilder {
-    codec_id: CodecID::Opus,
-    name: OPUS_ENCODER_NAME,
-};
+    fn name(&self) -> &'static str {
+        CODEC_NAME
+    }
+}
 
 #[ctor]
 fn initialize() {
-    register_encoder(Arc::new(OPUS_ENCODER_BUILDER), false);
+    register_encoder(Arc::new(OpusEncoderBuilder), false);
 }

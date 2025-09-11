@@ -6,6 +6,7 @@ use media_codec::{
     codec::{Codec, CodecBuilder, CodecID},
     decoder::{register_decoder, AudioDecoderConfiguration, AudioDecoderParameters, Decoder, DecoderBuilder},
     packet::Packet,
+    CodecInfomation,
 };
 use media_core::{
     audio::{AudioFrameDescriptor, SampleFormat},
@@ -141,10 +142,9 @@ impl OpusDecoder {
     }
 }
 
-pub struct OpusDecoderBuilder {
-    codec_id: CodecID,
-    name: &'static str,
-}
+const CODEC_NAME: &str = "opus-dec";
+
+pub struct OpusDecoderBuilder;
 
 impl DecoderBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
     fn new_decoder(
@@ -159,22 +159,25 @@ impl DecoderBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
 
 impl CodecBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
     fn id(&self) -> CodecID {
-        self.codec_id
+        CodecID::Opus
     }
 
     fn name(&self) -> &'static str {
-        self.name
+        CODEC_NAME
     }
 }
 
-const OPUS_DECODER_NAME: &str = "opus-dec";
+impl CodecInfomation for OpusDecoder {
+    fn id(&self) -> CodecID {
+        CodecID::Opus
+    }
 
-const OPUS_DECODER_BUILDER: OpusDecoderBuilder = OpusDecoderBuilder {
-    codec_id: CodecID::Opus,
-    name: OPUS_DECODER_NAME,
-};
+    fn name(&self) -> &'static str {
+        CODEC_NAME
+    }
+}
 
 #[ctor]
 fn initialize() {
-    register_decoder(Arc::new(OPUS_DECODER_BUILDER), false);
+    register_decoder(Arc::new(OpusDecoderBuilder), false);
 }
