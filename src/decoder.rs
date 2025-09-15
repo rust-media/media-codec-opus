@@ -4,7 +4,7 @@ use bytemuck;
 use ctor::ctor;
 use media_codec::{
     codec::{Codec, CodecBuilder, CodecID},
-    decoder::{register_decoder, AudioDecoderConfiguration, AudioDecoderParameters, Decoder, DecoderBuilder},
+    decoder::{register_decoder, AudioDecoder, AudioDecoderParameters, Decoder, DecoderBuilder},
     packet::Packet,
     CodecInfomation,
 };
@@ -27,7 +27,7 @@ struct OpusDecoder {
 unsafe impl Send for OpusDecoder {}
 unsafe impl Sync for OpusDecoder {}
 
-impl Codec<AudioDecoderConfiguration> for OpusDecoder {
+impl Codec<AudioDecoder> for OpusDecoder {
     fn configure(&mut self, _parameters: Option<&AudioDecoderParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
@@ -37,8 +37,8 @@ impl Codec<AudioDecoderConfiguration> for OpusDecoder {
     }
 }
 
-impl Decoder<AudioDecoderConfiguration> for OpusDecoder {
-    fn send_packet(&mut self, config: &AudioDecoderConfiguration, packet: &Packet) -> Result<()> {
+impl Decoder<AudioDecoder> for OpusDecoder {
+    fn send_packet(&mut self, config: &AudioDecoder, packet: &Packet) -> Result<()> {
         let audio_params = &config.audio;
         let sample_rate = audio_params.sample_rate.ok_or(invalid_param_error!(config))?.get();
         let sample_format = if audio_params.format.ok_or(invalid_param_error!(config))? == SampleFormat::F32 {
@@ -99,15 +99,15 @@ impl Decoder<AudioDecoderConfiguration> for OpusDecoder {
         Ok(())
     }
 
-    fn receive_frame(&mut self, _config: &AudioDecoderConfiguration) -> Result<Frame<'static>> {
+    fn receive_frame(&mut self, _config: &AudioDecoder) -> Result<Frame<'static>> {
         self.pending.pop_front().ok_or(Error::Again("no frame available".to_string()))
     }
 
-    fn receive_frame_borrowed(&mut self, _config: &AudioDecoderConfiguration) -> Result<Frame<'_>> {
+    fn receive_frame_borrowed(&mut self, _config: &AudioDecoder) -> Result<Frame<'_>> {
         Err(Error::Unsupported("borrowed frame not supported".to_string()))
     }
 
-    fn flush(&mut self, _config: &AudioDecoderConfiguration) -> Result<()> {
+    fn flush(&mut self, _config: &AudioDecoder) -> Result<()> {
         unsafe { opus_sys::opus_decoder_ctl(self.decoder, opus_sys::OPUS_RESET_STATE) };
         Ok(())
     }
@@ -146,18 +146,18 @@ const CODEC_NAME: &str = "opus-dec";
 
 pub struct OpusDecoderBuilder;
 
-impl DecoderBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
+impl DecoderBuilder<AudioDecoder> for OpusDecoderBuilder {
     fn new_decoder(
         &self,
         codec_id: CodecID,
         parameters: &AudioDecoderParameters,
         options: Option<&Variant>,
-    ) -> Result<Box<dyn Decoder<AudioDecoderConfiguration>>> {
+    ) -> Result<Box<dyn Decoder<AudioDecoder>>> {
         Ok(Box::new(OpusDecoder::new(codec_id, parameters, options)?))
     }
 }
 
-impl CodecBuilder<AudioDecoderConfiguration> for OpusDecoderBuilder {
+impl CodecBuilder<AudioDecoder> for OpusDecoderBuilder {
     fn id(&self) -> CodecID {
         CodecID::Opus
     }
@@ -178,6 +178,6 @@ impl CodecInfomation for OpusDecoder {
 }
 
 #[ctor]
-fn initialize() {
+pub fn initialize() {
     register_decoder(Arc::new(OpusDecoderBuilder), false);
 }

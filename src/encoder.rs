@@ -4,7 +4,7 @@ use bytemuck;
 use ctor::ctor;
 use media_codec::{
     codec::{AudioParameters, Codec, CodecBuilder, CodecID},
-    encoder::{register_encoder, AudioEncoderConfiguration, AudioEncoderParameters, Encoder, EncoderBuilder, EncoderParameters},
+    encoder::{register_encoder, AudioEncoder, AudioEncoderParameters, Encoder, EncoderBuilder, EncoderParameters},
     packet::Packet,
     CodecInfomation,
 };
@@ -75,7 +75,7 @@ struct OpusEncoder {
 unsafe impl Send for OpusEncoder {}
 unsafe impl Sync for OpusEncoder {}
 
-impl Codec<AudioEncoderConfiguration> for OpusEncoder {
+impl Codec<AudioEncoder> for OpusEncoder {
     fn configure(&mut self, _parameters: Option<&AudioEncoderParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
@@ -97,8 +97,8 @@ const MAX_FRAMES: usize = 6;
 // The packet header size is 7 bytes
 const PACKET_HEADER_SIZE: usize = 7;
 
-impl Encoder<AudioEncoderConfiguration> for OpusEncoder {
-    fn send_frame(&mut self, _config: &AudioEncoderConfiguration, frame: &Frame) -> Result<()> {
+impl Encoder<AudioEncoder> for OpusEncoder {
+    fn send_frame(&mut self, _config: &AudioEncoder, frame: &Frame) -> Result<()> {
         let desc = frame.audio_descriptor().ok_or(Error::Unsupported("media type".to_string()))?;
         let sample_format = desc.format;
 
@@ -182,11 +182,11 @@ impl Encoder<AudioEncoderConfiguration> for OpusEncoder {
         Ok(())
     }
 
-    fn receive_packet_borrowed(&mut self, _parameters: &AudioEncoderConfiguration) -> Result<Packet<'_>> {
+    fn receive_packet_borrowed(&mut self, _parameters: &AudioEncoder) -> Result<Packet<'_>> {
         self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".to_string()))
     }
 
-    fn flush(&mut self, _config: &AudioEncoderConfiguration) -> Result<()> {
+    fn flush(&mut self, _config: &AudioEncoder) -> Result<()> {
         self.buffer.fill(0);
 
         Ok(())
@@ -305,18 +305,18 @@ const CODEC_NAME: &str = "opus-enc";
 
 pub struct OpusEncoderBuilder;
 
-impl EncoderBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
+impl EncoderBuilder<AudioEncoder> for OpusEncoderBuilder {
     fn new_encoder(
         &self,
         codec_id: CodecID,
         parameters: &AudioEncoderParameters,
         options: Option<&Variant>,
-    ) -> Result<Box<dyn Encoder<AudioEncoderConfiguration>>> {
+    ) -> Result<Box<dyn Encoder<AudioEncoder>>> {
         Ok(Box::new(OpusEncoder::new(codec_id, parameters, options)?))
     }
 }
 
-impl CodecBuilder<AudioEncoderConfiguration> for OpusEncoderBuilder {
+impl CodecBuilder<AudioEncoder> for OpusEncoderBuilder {
     fn id(&self) -> CodecID {
         CodecID::Opus
     }
@@ -337,6 +337,6 @@ impl CodecInfomation for OpusEncoder {
 }
 
 #[ctor]
-fn initialize() {
+pub fn initialize() {
     register_encoder(Arc::new(OpusEncoderBuilder), false);
 }
