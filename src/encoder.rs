@@ -134,7 +134,7 @@ impl Encoder<AudioEncoder> for OpusEncoder {
                         opus_sys::opus_encode(
                             self.encoder,
                             data.as_ptr(),
-                            data.len() as i32 / (sample_size as i32),
+                            self.options.frame_size as i32,
                             packet_data.as_mut_ptr(),
                             packet_data.len() as i32,
                         )
@@ -146,7 +146,7 @@ impl Encoder<AudioEncoder> for OpusEncoder {
                         opus_sys::opus_encode_float(
                             self.encoder,
                             data.as_ptr(),
-                            data.len() as i32 / (sample_size as i32),
+                            self.options.frame_size as i32,
                             packet_data.as_mut_ptr(),
                             packet_data.len() as i32,
                         )
