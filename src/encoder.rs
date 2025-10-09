@@ -109,7 +109,8 @@ impl Encoder<AudioEncoder> for OpusEncoder {
         let guard = frame.map().map_err(|_| Error::Invalid("not readable".into()))?;
         let planes = guard.planes().unwrap();
         let packet_size = PACKET_HEADER_SIZE + MAX_FRAME_SIZE * MAX_FRAMES;
-        let sample_size = desc.channels().get() as usize * sample_format.bytes() as usize;
+        let channels = desc.channels().get() as usize;
+        let sample_size = channels * sample_format.bytes() as usize;
         let frame_data = planes.plane_data(0).unwrap();
         let frame_data_size = desc.samples.get() as usize * sample_size;
         let chunk_size = self.options.frame_size as usize * sample_size;
@@ -134,7 +135,7 @@ impl Encoder<AudioEncoder> for OpusEncoder {
                         opus_sys::opus_encode(
                             self.encoder,
                             data.as_ptr(),
-                            data.len() as i32 / (sample_size as i32),
+                            (data.len() / channels) as i32,
                             packet_data.as_mut_ptr(),
                             packet_data.len() as i32,
                         )
@@ -146,7 +147,7 @@ impl Encoder<AudioEncoder> for OpusEncoder {
                         opus_sys::opus_encode_float(
                             self.encoder,
                             data.as_ptr(),
-                            data.len() as i32 / (sample_size as i32),
+                            (data.len() / channels) as i32,
                             packet_data.as_mut_ptr(),
                             packet_data.len() as i32,
                         )
@@ -231,7 +232,7 @@ impl OpusEncoder {
             _ => return Err(Error::Invalid("frame duration".into())),
         }
 
-        opts.frame_size = frame_size;
+        opts.frame_size = frame_size * sample_rate as u32 / 48000;
 
         let mut error = 0;
         let opus_encoder = unsafe { opus_sys::opus_encoder_create(sample_rate, channels, opts.application, &mut error) };
