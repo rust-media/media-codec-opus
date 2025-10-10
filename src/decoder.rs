@@ -57,6 +57,10 @@ impl Decoder<AudioDecoder> for OpusDecoder {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();
 
+            if packet_data.len() <= 1 {
+                return Err(Error::Invalid(format!("packet with size {} will trigger opus PLC", packet_data.len())));
+            }
+
             if sample_format == SampleFormat::F32 {
                 let data = bytemuck::cast_slice_mut::<u8, f32>(planes.plane_data_mut(0).unwrap());
                 unsafe {
