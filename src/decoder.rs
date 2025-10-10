@@ -57,6 +57,16 @@ impl Decoder<AudioDecoder> for OpusDecoder {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();
 
+            let (frame_size, fec) = if packet_data.len() <= 1 {
+                let request = 0i32;
+                unsafe {
+                    opus_sys::opus_decoder_ctl(self.decoder, opus_sys::OPUS_GET_LAST_PACKET_DURATION_REQUEST, &request);
+                }
+                (request, true)
+            } else {
+                (max_samples as i32, false)
+            };
+
             if sample_format == SampleFormat::F32 {
                 let data = bytemuck::cast_slice_mut::<u8, f32>(planes.plane_data_mut(0).unwrap());
                 unsafe {
@@ -65,8 +75,8 @@ impl Decoder<AudioDecoder> for OpusDecoder {
                         packet_data.as_ptr(),
                         packet_data.len() as i32,
                         data.as_mut_ptr(),
-                        max_samples as i32,
-                        false as i32,
+                        frame_size,
+                        fec as i32,
                     )
                 }
             } else {
@@ -77,8 +87,8 @@ impl Decoder<AudioDecoder> for OpusDecoder {
                         packet_data.as_ptr(),
                         packet_data.len() as i32,
                         data.as_mut_ptr(),
-                        max_samples as i32,
-                        false as i32,
+                        frame_size,
+                        fec as i32,
                     )
                 }
             }
