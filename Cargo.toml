@@ -12,8 +12,8 @@ keywords = ["opus"]
 edition = "2021"
 
 [dependencies]
-bytemuck = "1.23"
-ctor = "0.5"
+bytemuck = "1.24"
+ctor = "0.6"
 media-codec = { version = "0.6.1", default-features = false, features = ["audio"] }
 media-codec-opus-sys = { version = "0.2", path = "sys" }
 media-core = { version = "0.6.1", default-features = false, features = ["audio"] }

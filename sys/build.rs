@@ -1,7 +1,6 @@
 use std::{env, path::PathBuf};
 
-use bindgen::EnumVariation::Rust;
-use bindgen::MacroTypeVariation::Signed;
+use bindgen::{EnumVariation::Rust, MacroTypeVariation::Signed};
 use pkg_config::Config;
 
 fn main() {

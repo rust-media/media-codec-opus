@@ -6,10 +6,18 @@ use media_codec::{
     codec::{AudioParameters, Codec, CodecBuilder, CodecID},
     encoder::{register_encoder, AudioEncoder, AudioEncoderParameters, Encoder, EncoderBuilder, EncoderParameters},
     packet::Packet,
-    CodecInfomation,
+    CodecInformation, CodecParameters,
 };
 use media_core::{
-    audio::SampleFormat, error::Error, frame::Frame, invalid_param_error, rational::Rational64, unsupported_error, variant::Variant, Result,
+    audio::SampleFormat,
+    buffer::BufferPool,
+    error::Error,
+    frame::{Frame, SharedFrame},
+    invalid_param_error,
+    rational::Rational64,
+    unsupported_error,
+    variant::Variant,
+    Result,
 };
 
 use crate::{opus_error_string, opus_sys};
@@ -76,7 +84,7 @@ unsafe impl Send for OpusEncoder {}
 unsafe impl Sync for OpusEncoder {}
 
 impl Codec<AudioEncoder> for OpusEncoder {
-    fn configure(&mut self, _parameters: Option<&AudioEncoderParameters>, _options: Option<&Variant>) -> Result<()> {
+    fn configure(&mut self, _params: Option<&CodecParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
 
@@ -90,6 +98,8 @@ impl Codec<AudioEncoder> for OpusEncoder {
     }
 }
 
+const DEFAULT_PACKET_PENDING_CAPACITY: usize = 8;
+
 // The maximum frame size is 1275 bytes
 const MAX_FRAME_SIZE: usize = 1275;
 // 120ms packets consist of 6 frames in one packet
@@ -98,8 +108,136 @@ const MAX_FRAMES: usize = 6;
 const PACKET_HEADER_SIZE: usize = 7;
 
 impl Encoder<AudioEncoder> for OpusEncoder {
-    fn send_frame(&mut self, _config: &AudioEncoder, frame: &Frame) -> Result<()> {
-        let desc = frame.audio_descriptor().ok_or(Error::Unsupported("media type".to_string()))?;
+    fn send_frame(&mut self, _config: &AudioEncoder, pool: Option<&Arc<BufferPool>>, frame: SharedFrame<Frame<'static>>) -> Result<()> {
+        self.encode(frame, pool)?;
+        Ok(())
+    }
+
+    fn receive_packet(&mut self, _parameters: &AudioEncoder, _pool: Option<&Arc<BufferPool>>) -> Result<Packet<'static>> {
+        self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".to_string()))
+    }
+
+    fn receive_packet_borrowed(&mut self, _config: &AudioEncoder) -> Result<Packet<'_>> {
+        Err(Error::Unsupported("borrowed packet".to_string()))
+    }
+
+    fn flush(&mut self, _config: &AudioEncoder) -> Result<()> {
+        self.buffer.fill(0);
+
+        Ok(())
+    }
+}
+
+impl Drop for OpusEncoder {
+    fn drop(&mut self) {
+        unsafe { opus_sys::opus_encoder_destroy(self.encoder) }
+    }
+}
+
+impl OpusEncoder {
+    pub fn new(codec_id: CodecID, parameters: &AudioEncoderParameters, options: Option<&Variant>) -> Result<Self> {
+        if codec_id != CodecID::Opus {
+            return Err(unsupported_error!(codec_id));
+        }
+
+        let mut opts = OpusOptions::from_variant(options);
+
+        let audio_params = &parameters.audio;
+        let sample_format = audio_params.format.ok_or_else(|| invalid_param_error!(parameters))?;
+
+        if sample_format != SampleFormat::S16 && sample_format != SampleFormat::F32 {
+            return Err(unsupported_error!(sample_format));
+        }
+
+        let sample_rate = audio_params.sample_rate.ok_or_else(|| invalid_param_error!(parameters))?.get() as opus_sys::opus_int32;
+        let channels = audio_params.channel_layout.as_ref().ok_or_else(|| invalid_param_error!(parameters))?.channels.get() as c_int;
+
+        // Calculate frame size in samples at 48kHz to validate frame duration
+        let frame_size = (opts.frame_duration * 48000f32 / 1000f32) as u32;
+        match frame_size {
+            // 2.5ms | 5ms
+            120 | 240 => {
+                if opts.application != opus_sys::OPUS_APPLICATION_RESTRICTED_LOWDELAY {
+                    opts.application = opus_sys::OPUS_APPLICATION_RESTRICTED_LOWDELAY;
+                }
+            }
+            // 10ms | 20ms | 40ms | 60ms | 80ms | 100ms | 120ms
+            480 | 960 | 1920 | 2880 | 3840 | 4800 | 5760 => {}
+            _ => return Err(Error::Invalid("frame duration".into())),
+        }
+
+        opts.frame_size = frame_size * sample_rate as u32 / 48000;
+
+        let mut error = 0;
+        let opus_encoder = unsafe { opus_sys::opus_encoder_create(sample_rate, channels, opts.application, &mut error) };
+        if opus_encoder.is_null() || error != opus_sys::OPUS_OK {
+            return Err(Error::CreationFailed(opus_error_string(error)));
+        }
+
+        let mut encoder: OpusEncoder = OpusEncoder {
+            encoder: opus_encoder,
+            pending: VecDeque::with_capacity(DEFAULT_PACKET_PENDING_CAPACITY),
+            options: opts,
+            buffer: vec![0u8; frame_size as usize * channels as usize * sample_format.bytes() as usize],
+        };
+
+        encoder.set_audio_parameters(audio_params)?;
+        encoder.set_encoder_parameters(&parameters.encoder)?;
+        encoder.update_options()?;
+
+        Ok(encoder)
+    }
+
+    fn encoder_ctl(&mut self, key: i32, value: i32) -> Result<()> {
+        let ret = unsafe { opus_sys::opus_encoder_ctl(self.encoder, key, value) };
+
+        if ret != opus_sys::OPUS_OK {
+            return Err(Error::SetFailed(opus_error_string(ret)));
+        }
+
+        Ok(())
+    }
+
+    fn set_audio_parameters(&mut self, _audio_params: &AudioParameters) -> Result<()> {
+        Ok(())
+    }
+
+    fn set_encoder_parameters(&mut self, encoder_params: &EncoderParameters) -> Result<()> {
+        if let Some(bit_rate) = encoder_params.bit_rate {
+            self.encoder_ctl(opus_sys::OPUS_SET_BITRATE_REQUEST, bit_rate as i32)?;
+        }
+
+        if let Some(level) = encoder_params.level {
+            self.options.complexity = if !(0..=10).contains(&level) {
+                10
+            } else {
+                level as u32
+            };
+        }
+
+        Ok(())
+    }
+
+    fn update_options(&mut self) -> Result<()> {
+        self.encoder_ctl(opus_sys::OPUS_SET_VBR_REQUEST, (self.options.vbr > 0) as i32)?;
+        self.encoder_ctl(opus_sys::OPUS_SET_VBR_CONSTRAINT_REQUEST, (self.options.vbr == 2) as i32)?;
+        self.encoder_ctl(opus_sys::OPUS_SET_PACKET_LOSS_PERC_REQUEST, self.options.packet_loss)?;
+        self.encoder_ctl(opus_sys::OPUS_SET_INBAND_FEC_REQUEST, self.options.fec as i32)?;
+
+        if self.options.complexity > 0 {
+            self.encoder_ctl(opus_sys::OPUS_SET_COMPLEXITY_REQUEST, self.options.complexity as i32)?;
+        }
+
+        if self.options.max_bandwidth > 0 {
+            self.encoder_ctl(opus_sys::OPUS_SET_MAX_BANDWIDTH_REQUEST, self.options.max_bandwidth as i32)?;
+        }
+
+        Ok(())
+    }
+
+    fn encode(&mut self, frame: SharedFrame<Frame<'static>>, pool: Option<&Arc<BufferPool>>) -> Result<()> {
+        let frame = frame.read();
+        let desc = frame.audio_descriptor().ok_or_else(|| Error::Unsupported("media type".to_string()))?;
         let sample_format = desc.format;
 
         if sample_format != SampleFormat::S16 && sample_format != SampleFormat::F32 {
@@ -119,8 +257,13 @@ impl Encoder<AudioEncoder> for OpusEncoder {
         self.buffer.fill(0);
 
         for chunk in frame_data[..frame_data_size].chunks(chunk_size) {
-            let mut packet = Packet::new(packet_size);
-            let packet_data = packet.data_mut().ok_or(Error::Invalid("packet not writable".into()))?;
+            let mut packet = if let Some(pool) = pool {
+                Packet::from_buffer(pool.get_buffer_with_length(packet_size))
+            } else {
+                Packet::new(packet_size)
+            };
+
+            let packet_data = packet.data_mut().ok_or_else(|| Error::Invalid("packet not writable".into()))?;
             let data = if chunk.len() < chunk_size {
                 self.buffer[..chunk.len()].copy_from_slice(chunk);
                 self.buffer.as_slice()
@@ -182,124 +325,6 @@ impl Encoder<AudioEncoder> for OpusEncoder {
 
         Ok(())
     }
-
-    fn receive_packet_borrowed(&mut self, _parameters: &AudioEncoder) -> Result<Packet<'_>> {
-        self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".to_string()))
-    }
-
-    fn flush(&mut self, _config: &AudioEncoder) -> Result<()> {
-        self.buffer.fill(0);
-
-        Ok(())
-    }
-}
-
-impl Drop for OpusEncoder {
-    fn drop(&mut self) {
-        unsafe { opus_sys::opus_encoder_destroy(self.encoder) }
-    }
-}
-
-impl OpusEncoder {
-    pub fn new(codec_id: CodecID, parameters: &AudioEncoderParameters, options: Option<&Variant>) -> Result<Self> {
-        if codec_id != CodecID::Opus {
-            return Err(unsupported_error!(codec_id));
-        }
-
-        let mut opts = OpusOptions::from_variant(options);
-
-        let audio_params = &parameters.audio;
-        let sample_format = audio_params.format.ok_or(invalid_param_error!(parameters))?;
-
-        if sample_format != SampleFormat::S16 && sample_format != SampleFormat::F32 {
-            return Err(unsupported_error!(sample_format));
-        }
-
-        let sample_rate = audio_params.sample_rate.ok_or(invalid_param_error!(parameters))?.get() as opus_sys::opus_int32;
-        let channels = audio_params.channel_layout.as_ref().ok_or(invalid_param_error!(parameters))?.channels.get() as c_int;
-
-        // Calculate frame size in samples at 48kHz to validate frame duration
-        let frame_size = (opts.frame_duration * 48000f32 / 1000f32) as u32;
-        match frame_size {
-            // 2.5ms | 5ms
-            120 | 240 => {
-                if opts.application != opus_sys::OPUS_APPLICATION_RESTRICTED_LOWDELAY {
-                    opts.application = opus_sys::OPUS_APPLICATION_RESTRICTED_LOWDELAY;
-                }
-            }
-            // 10ms | 20ms | 40ms | 60ms | 80ms | 100ms | 120ms
-            480 | 960 | 1920 | 2880 | 3840 | 4800 | 5760 => {}
-            _ => return Err(Error::Invalid("frame duration".into())),
-        }
-
-        opts.frame_size = frame_size * sample_rate as u32 / 48000;
-
-        let mut error = 0;
-        let opus_encoder = unsafe { opus_sys::opus_encoder_create(sample_rate, channels, opts.application, &mut error) };
-        if opus_encoder.is_null() || error != opus_sys::OPUS_OK {
-            return Err(Error::CreationFailed(opus_error_string(error)));
-        }
-
-        let mut encoder: OpusEncoder = OpusEncoder {
-            encoder: opus_encoder,
-            pending: VecDeque::new(),
-            options: opts,
-            buffer: vec![0u8; frame_size as usize * channels as usize * sample_format.bytes() as usize],
-        };
-
-        encoder.set_audio_parameters(audio_params)?;
-        encoder.set_encoder_parameters(&parameters.encoder)?;
-        encoder.update_options()?;
-
-        Ok(encoder)
-    }
-
-    fn encoder_ctl(&mut self, key: i32, value: i32) -> Result<()> {
-        let ret = unsafe { opus_sys::opus_encoder_ctl(self.encoder, key, value) };
-
-        if ret != opus_sys::OPUS_OK {
-            return Err(Error::SetFailed(opus_error_string(ret)));
-        }
-
-        Ok(())
-    }
-
-    fn set_audio_parameters(&mut self, _audio_params: &AudioParameters) -> Result<()> {
-        Ok(())
-    }
-
-    fn set_encoder_parameters(&mut self, encoder_params: &EncoderParameters) -> Result<()> {
-        if let Some(bit_rate) = encoder_params.bit_rate {
-            self.encoder_ctl(opus_sys::OPUS_SET_BITRATE_REQUEST, bit_rate as i32)?;
-        }
-
-        if let Some(level) = encoder_params.level {
-            self.options.complexity = if !(0..=10).contains(&level) {
-                10
-            } else {
-                level as u32
-            };
-        }
-
-        Ok(())
-    }
-
-    fn update_options(&mut self) -> Result<()> {
-        self.encoder_ctl(opus_sys::OPUS_SET_VBR_REQUEST, (self.options.vbr > 0) as i32)?;
-        self.encoder_ctl(opus_sys::OPUS_SET_VBR_CONSTRAINT_REQUEST, (self.options.vbr == 2) as i32)?;
-        self.encoder_ctl(opus_sys::OPUS_SET_PACKET_LOSS_PERC_REQUEST, self.options.packet_loss)?;
-        self.encoder_ctl(opus_sys::OPUS_SET_INBAND_FEC_REQUEST, self.options.fec as i32)?;
-
-        if self.options.complexity > 0 {
-            self.encoder_ctl(opus_sys::OPUS_SET_COMPLEXITY_REQUEST, self.options.complexity as i32)?;
-        }
-
-        if self.options.max_bandwidth > 0 {
-            self.encoder_ctl(opus_sys::OPUS_SET_MAX_BANDWIDTH_REQUEST, self.options.max_bandwidth as i32)?;
-        }
-
-        Ok(())
-    }
 }
 
 const CODEC_NAME: &str = "opus-enc";
@@ -307,13 +332,8 @@ const CODEC_NAME: &str = "opus-enc";
 pub struct OpusEncoderBuilder;
 
 impl EncoderBuilder<AudioEncoder> for OpusEncoderBuilder {
-    fn new_encoder(
-        &self,
-        codec_id: CodecID,
-        parameters: &AudioEncoderParameters,
-        options: Option<&Variant>,
-    ) -> Result<Box<dyn Encoder<AudioEncoder>>> {
-        Ok(Box::new(OpusEncoder::new(codec_id, parameters, options)?))
+    fn new_encoder(&self, codec_id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Encoder<AudioEncoder>>> {
+        Ok(Box::new(OpusEncoder::new(codec_id, &params.try_into()?, options)?))
     }
 }
 
@@ -327,7 +347,7 @@ impl CodecBuilder<AudioEncoder> for OpusEncoderBuilder {
     }
 }
 
-impl CodecInfomation for OpusEncoder {
+impl CodecInformation for OpusEncoder {
     fn id(&self) -> CodecID {
         CodecID::Opus
     }
