@@ -79,7 +79,7 @@ const DEFAULT_PACKET_PENDING_CAPACITY: usize = 2;
 
 impl OpusDecoder {
     pub fn new(codec_id: CodecID, params: &AudioDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
-        if codec_id != CodecID::Opus {
+        if codec_id != CodecID::OPUS {
             return Err(unsupported_error!(codec_id));
         }
 
@@ -172,7 +172,7 @@ impl DecoderBuilder<AudioDecoder> for OpusDecoderBuilder {
 
 impl CodecBuilder<AudioDecoder> for OpusDecoderBuilder {
     fn id(&self) -> CodecID {
-        CodecID::Opus
+        CodecID::OPUS
     }
 
     fn name(&self) -> &'static str {
@@ -182,7 +182,7 @@ impl CodecBuilder<AudioDecoder> for OpusDecoderBuilder {
 
 impl CodecInformation for OpusDecoder {
     fn id(&self) -> CodecID {
-        CodecID::Opus
+        CodecID::OPUS
     }
 
     fn name(&self) -> &'static str {

@@ -136,7 +136,7 @@ impl Drop for OpusEncoder {
 
 impl OpusEncoder {
     pub fn new(codec_id: CodecID, parameters: &AudioEncoderParameters, options: Option<&Variant>) -> Result<Self> {
-        if codec_id != CodecID::Opus {
+        if codec_id != CodecID::OPUS {
             return Err(unsupported_error!(codec_id));
         }
 
@@ -339,7 +339,7 @@ impl EncoderBuilder<AudioEncoder> for OpusEncoderBuilder {
 
 impl CodecBuilder<AudioEncoder> for OpusEncoderBuilder {
     fn id(&self) -> CodecID {
-        CodecID::Opus
+        CodecID::OPUS
     }
 
     fn name(&self) -> &'static str {
@@ -349,7 +349,7 @@ impl CodecBuilder<AudioEncoder> for OpusEncoderBuilder {
 
 impl CodecInformation for OpusEncoder {
     fn id(&self) -> CodecID {
-        CodecID::Opus
+        CodecID::OPUS
     }
 
     fn name(&self) -> &'static str {
