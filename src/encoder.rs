@@ -56,6 +56,8 @@ impl OpusOptions {
             let packet_loss = variant["packet_loss"].get_int32().unwrap_or(0);
             let fec = variant["fec"].get_bool().unwrap_or(false);
             let vbr = variant["vbr"].get_uint32().unwrap_or(1);
+            let max_bandwidth = variant["max_bandwidth"].get_uint32().unwrap_or(0);
+            let complexity = variant["complexity"].get_uint32().unwrap_or(10);
 
             OpusOptions {
                 application,
@@ -64,8 +66,8 @@ impl OpusOptions {
                 packet_loss,
                 fec,
                 vbr,
-                max_bandwidth: 0,
-                complexity: 10,
+                max_bandwidth,
+                complexity,
             }
         } else {
             Self::default()
@@ -84,15 +86,49 @@ unsafe impl Send for OpusEncoder {}
 unsafe impl Sync for OpusEncoder {}
 
 impl Codec<AudioEncoder> for OpusEncoder {
-    fn configure(&mut self, _params: Option<&CodecParameters>, _options: Option<&Variant>) -> Result<()> {
+    fn configure(&mut self, params: Option<&CodecParameters>, options: Option<&Variant>) -> Result<()> {
+        if let Some(params) = params {
+            let params: &AudioEncoderParameters = &params.try_into()?;
+            self.set_audio_parameters(&params.audio)?;
+            self.set_encoder_parameters(&params.encoder)?;
+        }
+
+        if let Some(options) = options {
+            self.options = OpusOptions::from_variant(Some(options));
+            self.update_options()?;
+        }
+
         Ok(())
     }
 
     fn set_option(&mut self, key: &str, value: &Variant) -> Result<()> {
-        let value = value.get_int32().ok_or_else(|| invalid_param_error!(value))?;
+        let value = match value {
+            Variant::Bool(value) => *value as i32,
+            _ => value.get_int32().ok_or_else(|| invalid_param_error!(value))?,
+        };
 
         match key {
             "bit_rate" => self.encoder_ctl(opus_sys::OPUS_SET_BITRATE_REQUEST, value),
+            "packet_loss_percent" => {
+                self.options.packet_loss = value;
+                self.encoder_ctl(opus_sys::OPUS_SET_PACKET_LOSS_PERC_REQUEST, value)
+            }
+            "fec" => {
+                self.options.fec = value != 0;
+                self.encoder_ctl(opus_sys::OPUS_SET_INBAND_FEC_REQUEST, value)
+            }
+            "vbr" => {
+                self.options.vbr = value as u32;
+                self.encoder_ctl(opus_sys::OPUS_SET_VBR_REQUEST, value)
+            }
+            "max_bandwidth" => {
+                self.options.max_bandwidth = value as u32;
+                self.encoder_ctl(opus_sys::OPUS_SET_MAX_BANDWIDTH_REQUEST, value)
+            }
+            "complexity" => {
+                self.options.complexity = value as u32;
+                self.encoder_ctl(opus_sys::OPUS_SET_COMPLEXITY_REQUEST, value)
+            }
             _ => Err(unsupported_error!(key)),
         }
     }
