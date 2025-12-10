@@ -23,6 +23,8 @@ use crate::{opus_error_string, opus_sys};
 struct OpusDecoder {
     decoder: *mut opus_sys::OpusDecoder,
     pending: VecDeque<SharedFrame<Frame<'static>>>,
+    packet_loss: bool,
+    fec: bool,
 }
 
 unsafe impl Send for OpusDecoder {}
@@ -33,24 +35,43 @@ impl Codec<AudioDecoder> for OpusDecoder {
         Ok(())
     }
 
-    fn set_option(&mut self, _key: &str, _value: &Variant) -> Result<()> {
-        Ok(())
+    fn set_option(&mut self, key: &str, value: &Variant) -> Result<()> {
+        let value = match value {
+            Variant::Bool(value) => *value as i32,
+            _ => value.get_int32().ok_or_else(|| invalid_param_error!(value))?,
+        };
+
+        match key {
+            "gain" => self.decoder_ctl(opus_sys::OPUS_SET_GAIN_REQUEST, value),
+            "packet_loss" => {
+                self.packet_loss = value != 0;
+                Ok(())
+            }
+            "fec" => {
+                self.fec = value != 0;
+                Ok(())
+            }
+            _ => Err(unsupported_error!(key)),
+        }
     }
 }
 
 impl Decoder<AudioDecoder> for OpusDecoder {
     fn send_packet(&mut self, config: &AudioDecoder, pool: Option<&Arc<FramePool<Frame<'static>>>>, packet: Packet) -> Result<()> {
         let desc = self.create_descriptor(config)?;
+        let fec = self.fec && self.packet_loss;
 
-        let mut frame = if let Some(pool) = pool {
-            pool.get_frame_with_descriptor(desc.clone().into())?
-        } else {
-            SharedFrame::<Frame<'static>>::new(Frame::audio_creator().create_with_descriptor(desc.clone())?)
-        };
+        if fec {
+            let mut frame = self.get_frame(pool, &desc)?;
+            self.decode(&desc, packet.clone(), frame.write().unwrap(), true)?;
+            self.pending.push_back(frame);
+        }
 
-        self.decode(&desc, packet, frame.write().unwrap())?;
-
-        self.pending.push_back(frame);
+        if !packet.data().is_empty() {
+            let mut frame = self.get_frame(pool, &desc)?;
+            self.decode(&desc, packet, frame.write().unwrap(), false)?;
+            self.pending.push_back(frame);
+        }
 
         Ok(())
     }
@@ -96,7 +117,27 @@ impl OpusDecoder {
         Ok(OpusDecoder {
             decoder,
             pending: VecDeque::with_capacity(DEFAULT_PACKET_PENDING_CAPACITY),
+            packet_loss: false,
+            fec: false,
         })
+    }
+
+    fn decoder_ctl(&mut self, key: i32, value: i32) -> Result<()> {
+        let ret = unsafe { opus_sys::opus_decoder_ctl(self.decoder, key, value) };
+
+        if ret != opus_sys::OPUS_OK {
+            return Err(Error::SetFailed(opus_error_string(ret)));
+        }
+
+        Ok(())
+    }
+
+    fn get_frame(&self, pool: Option<&Arc<FramePool<Frame<'static>>>>, desc: &AudioFrameDescriptor) -> Result<SharedFrame<Frame<'static>>> {
+        if let Some(pool) = pool {
+            pool.get_frame_with_descriptor(desc.clone().into())
+        } else {
+            Ok(SharedFrame::<Frame<'static>>::new(Frame::audio_creator().create_with_descriptor(desc.clone())?))
+        }
     }
 
     fn create_descriptor(&self, config: &AudioDecoder) -> Result<AudioFrameDescriptor> {
@@ -114,7 +155,7 @@ impl OpusDecoder {
         AudioFrameDescriptor::try_from_channel_layout(sample_format, max_samples, sample_rate, channel_layout.clone())
     }
 
-    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: Packet, frame: &mut Frame) -> Result<()> {
+    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: Packet, frame: &mut Frame, fec: bool) -> Result<()> {
         let ret = if let Ok(mut guard) = frame.map_mut() {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();
@@ -128,7 +169,7 @@ impl OpusDecoder {
                         packet_data.len() as i32,
                         data.as_mut_ptr(),
                         desc.samples.get() as i32,
-                        false as i32,
+                        fec as c_int,
                     )
                 }
             } else {
@@ -140,7 +181,7 @@ impl OpusDecoder {
                         packet_data.len() as i32,
                         data.as_mut_ptr(),
                         desc.samples.get() as i32,
-                        false as i32,
+                        fec as c_int,
                     )
                 }
             }
