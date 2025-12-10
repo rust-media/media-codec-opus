@@ -65,6 +65,7 @@ impl Decoder<AudioDecoder> for OpusDecoder {
             let mut frame = self.get_frame(pool, &desc)?;
             self.decode(&desc, packet.clone(), frame.write().unwrap(), true)?;
             self.pending.push_back(frame);
+            self.packet_loss = false;
         }
 
         if !packet.data().is_empty() {
