@@ -160,6 +160,11 @@ impl OpusDecoder {
         let ret = if let Ok(mut guard) = frame.map_mut() {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();
+            let frame_size = if fec {
+                unsafe { opus_sys::opus_packet_get_samples_per_frame(packet_data.as_ptr(), desc.sample_rate.get() as opus_sys::opus_int32) }
+            } else {
+                desc.samples.get() as c_int
+            };
 
             if desc.format == SampleFormat::F32 {
                 let data = bytemuck::cast_slice_mut::<u8, f32>(planes.plane_data_mut(0).unwrap());
@@ -167,9 +172,9 @@ impl OpusDecoder {
                     opus_sys::opus_decode_float(
                         self.decoder,
                         packet_data.as_ptr(),
-                        packet_data.len() as i32,
+                        packet_data.len() as opus_sys::opus_int32,
                         data.as_mut_ptr(),
-                        desc.samples.get() as i32,
+                        frame_size,
                         fec as c_int,
                     )
                 }
@@ -179,9 +184,9 @@ impl OpusDecoder {
                     opus_sys::opus_decode(
                         self.decoder,
                         packet_data.as_ptr(),
-                        packet_data.len() as i32,
+                        packet_data.len() as opus_sys::opus_int32,
                         data.as_mut_ptr(),
-                        desc.samples.get() as i32,
+                        frame_size,
                         fec as c_int,
                     )
                 }
