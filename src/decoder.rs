@@ -9,9 +9,9 @@ use media_codec::{
     CodecInformation, CodecParameters,
 };
 use media_core::{
-    audio::{AudioFrameDescriptor, SampleFormat},
+    audio::{AudioFrame, AudioFrameDescriptor, SampleFormat},
     error::Error,
-    frame::{Frame, SharedFrame},
+    frame::SharedFrame,
     frame_pool::FramePool,
     invalid_param_error, unsupported_error,
     variant::Variant,
@@ -22,7 +22,7 @@ use crate::{opus_error_string, opus_sys};
 
 struct OpusDecoder {
     decoder: *mut opus_sys::OpusDecoder,
-    pending: VecDeque<SharedFrame<Frame<'static>>>,
+    pending: VecDeque<SharedFrame<AudioFrame<'static>>>,
     packet_loss: bool,
     fec: bool,
 }
@@ -57,7 +57,7 @@ impl Codec<AudioDecoder> for OpusDecoder {
 }
 
 impl Decoder<AudioDecoder> for OpusDecoder {
-    fn send_packet(&mut self, config: &AudioDecoder, pool: Option<&Arc<FramePool<Frame<'static>>>>, packet: Packet) -> Result<()> {
+    fn send_packet(&mut self, config: &AudioDecoder, pool: Option<&Arc<FramePool<AudioFrame<'static>>>>, packet: Packet) -> Result<()> {
         let desc = self.create_descriptor(config)?;
         let fec = self.fec && self.packet_loss;
 
@@ -77,12 +77,12 @@ impl Decoder<AudioDecoder> for OpusDecoder {
         Ok(())
     }
 
-    fn receive_frame(&mut self, _config: &AudioDecoder, _pool: Option<&Arc<FramePool<Frame<'static>>>>) -> Result<SharedFrame<Frame<'static>>> {
+    fn receive_frame(
+        &mut self,
+        _config: &AudioDecoder,
+        _pool: Option<&Arc<FramePool<AudioFrame<'static>>>>,
+    ) -> Result<SharedFrame<AudioFrame<'static>>> {
         self.pending.pop_front().ok_or(Error::Again("no frame available".to_string()))
-    }
-
-    fn receive_frame_borrowed(&mut self, _config: &AudioDecoder) -> Result<Frame<'_>> {
-        Err(Error::Unsupported("borrowed frame".to_string()))
     }
 
     fn flush(&mut self, _config: &AudioDecoder) -> Result<()> {
@@ -133,11 +133,11 @@ impl OpusDecoder {
         Ok(())
     }
 
-    fn get_frame(&self, pool: Option<&Arc<FramePool<Frame<'static>>>>, desc: &AudioFrameDescriptor) -> Result<SharedFrame<Frame<'static>>> {
+    fn get_frame(&self, pool: Option<&Arc<FramePool<AudioFrame<'static>>>>, desc: &AudioFrameDescriptor) -> Result<SharedFrame<AudioFrame<'static>>> {
         if let Some(pool) = pool {
-            pool.get_frame_with_descriptor(desc.clone().into())
+            pool.get_frame_with_descriptor(desc.clone())
         } else {
-            Ok(SharedFrame::<Frame<'static>>::new(Frame::audio_creator().create_with_descriptor(desc.clone())?))
+            Ok(SharedFrame::<AudioFrame<'static>>::new(AudioFrame::new_with_descriptor(desc.clone())?))
         }
     }
 
@@ -156,7 +156,7 @@ impl OpusDecoder {
         AudioFrameDescriptor::try_from_channel_layout(sample_format, max_samples, sample_rate, channel_layout.clone())
     }
 
-    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: Packet, frame: &mut Frame, fec: bool) -> Result<()> {
+    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: Packet, frame: &mut AudioFrame, fec: bool) -> Result<()> {
         let ret = if let Ok(mut guard) = frame.map_mut() {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();

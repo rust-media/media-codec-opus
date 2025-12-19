@@ -9,10 +9,10 @@ use media_codec::{
     CodecInformation, CodecParameters,
 };
 use media_core::{
-    audio::SampleFormat,
+    audio::{AudioFrame, SampleFormat},
     buffer::BufferPool,
     error::Error,
-    frame::{Frame, SharedFrame},
+    frame::SharedFrame,
     invalid_param_error,
     rational::Rational64,
     unsupported_error,
@@ -144,17 +144,13 @@ const MAX_FRAMES: usize = 6;
 const PACKET_HEADER_SIZE: usize = 7;
 
 impl Encoder<AudioEncoder> for OpusEncoder {
-    fn send_frame(&mut self, _config: &AudioEncoder, pool: Option<&Arc<BufferPool>>, frame: SharedFrame<Frame<'static>>) -> Result<()> {
+    fn send_frame(&mut self, _config: &AudioEncoder, pool: Option<&Arc<BufferPool>>, frame: SharedFrame<AudioFrame<'static>>) -> Result<()> {
         self.encode(frame, pool)?;
         Ok(())
     }
 
     fn receive_packet(&mut self, _parameters: &AudioEncoder, _pool: Option<&Arc<BufferPool>>) -> Result<Packet<'static>> {
         self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".to_string()))
-    }
-
-    fn receive_packet_borrowed(&mut self, _config: &AudioEncoder) -> Result<Packet<'_>> {
-        Err(Error::Unsupported("borrowed packet".to_string()))
     }
 
     fn flush(&mut self, _config: &AudioEncoder) -> Result<()> {
@@ -271,9 +267,9 @@ impl OpusEncoder {
         Ok(())
     }
 
-    fn encode(&mut self, frame: SharedFrame<Frame<'static>>, pool: Option<&Arc<BufferPool>>) -> Result<()> {
+    fn encode(&mut self, frame: SharedFrame<AudioFrame<'static>>, pool: Option<&Arc<BufferPool>>) -> Result<()> {
         let frame = frame.read();
-        let desc = frame.audio_descriptor().ok_or_else(|| Error::Unsupported("media type".to_string()))?;
+        let desc = frame.descriptor();
         let sample_format = desc.format;
 
         if sample_format != SampleFormat::S16 && sample_format != SampleFormat::F32 {
