@@ -150,7 +150,7 @@ impl Encoder<AudioEncoder> for OpusEncoder {
     }
 
     fn receive_packet(&mut self, _parameters: &AudioEncoder, _pool: Option<&Arc<BufferPool>>) -> Result<Packet<'static>> {
-        self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".to_string()))
+        self.pending.pop_front().ok_or_else(|| Error::Again("no packet available".into()))
     }
 
     fn flush(&mut self, _config: &AudioEncoder) -> Result<()> {

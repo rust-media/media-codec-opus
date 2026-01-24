@@ -57,13 +57,13 @@ impl Codec<AudioDecoder> for OpusDecoder {
 }
 
 impl Decoder<AudioDecoder> for OpusDecoder {
-    fn send_packet(&mut self, config: &AudioDecoder, pool: Option<&Arc<FramePool<AudioFrame<'static>>>>, packet: Packet) -> Result<()> {
+    fn send_packet(&mut self, config: &AudioDecoder, pool: Option<&Arc<FramePool<AudioFrame<'static>>>>, packet: &Packet) -> Result<()> {
         let desc = self.create_descriptor(config)?;
         let fec = self.fec && self.packet_loss;
 
         if fec {
             let mut frame = self.get_frame(pool, &desc)?;
-            self.decode(&desc, packet.clone(), frame.write().unwrap(), true)?;
+            self.decode(&desc, packet, frame.write().unwrap(), true)?;
             self.pending.push_back(frame);
             self.packet_loss = false;
         }
@@ -82,7 +82,7 @@ impl Decoder<AudioDecoder> for OpusDecoder {
         _config: &AudioDecoder,
         _pool: Option<&Arc<FramePool<AudioFrame<'static>>>>,
     ) -> Result<SharedFrame<AudioFrame<'static>>> {
-        self.pending.pop_front().ok_or(Error::Again("no frame available".to_string()))
+        self.pending.pop_front().ok_or(Error::Again("no frame available".into()))
     }
 
     fn flush(&mut self, _config: &AudioDecoder) -> Result<()> {
@@ -156,7 +156,7 @@ impl OpusDecoder {
         AudioFrameDescriptor::try_from_channel_layout(sample_format, max_samples, sample_rate, channel_layout.clone())
     }
 
-    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: Packet, frame: &mut AudioFrame, fec: bool) -> Result<()> {
+    fn decode(&mut self, desc: &AudioFrameDescriptor, packet: &Packet, frame: &mut AudioFrame, fec: bool) -> Result<()> {
         let ret = if let Ok(mut guard) = frame.map_mut() {
             let mut planes = guard.planes_mut().unwrap();
             let packet_data = packet.data();
@@ -192,7 +192,7 @@ impl OpusDecoder {
                 }
             }
         } else {
-            return Err(Error::Invalid("not writable".to_string()));
+            return Err(Error::Invalid("not writable".into()));
         };
 
         let samples = if ret < 0 {

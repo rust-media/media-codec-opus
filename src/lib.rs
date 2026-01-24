@@ -3,12 +3,12 @@ pub mod decoder;
 #[cfg(feature = "encoder")]
 pub mod encoder;
 
-use std::ffi::CStr;
+use std::{borrow::Cow, ffi::CStr};
 
 use media_codec_opus_sys as opus_sys;
 
-pub(crate) fn opus_error_string(error: i32) -> String {
-    unsafe { CStr::from_ptr(opus_sys::opus_strerror(error)).to_string_lossy().into_owned() }
+pub(crate) fn opus_error_string(error: i32) -> Cow<'static, str> {
+    unsafe { CStr::from_ptr(opus_sys::opus_strerror(error)).to_string_lossy() }
 }
 
 #[repr(i32)]
