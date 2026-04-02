@@ -3,10 +3,9 @@ use std::{collections::VecDeque, os::raw::c_int, sync::Arc};
 use bytemuck;
 use ctor::ctor;
 use media_codec::{
-    codec::{Codec, CodecBuilder, CodecID},
     decoder::{register_decoder, AudioDecoder, AudioDecoderParameters, Decoder, DecoderBuilder},
     packet::Packet,
-    CodecInformation, CodecParameters,
+    Codec, CodecBuilder, CodecID, CodecInformation, CodecParameters,
 };
 use media_core::{
     audio::{AudioFrame, AudioFrameDescriptor, SampleFormat},
@@ -29,6 +28,16 @@ struct OpusDecoder {
 
 unsafe impl Send for OpusDecoder {}
 unsafe impl Sync for OpusDecoder {}
+
+impl CodecInformation for OpusDecoder {
+    fn id(&self) -> CodecID {
+        CodecID::OPUS
+    }
+
+    fn name(&self) -> &'static str {
+        CODEC_NAME
+    }
+}
 
 impl Codec<AudioDecoder> for OpusDecoder {
     fn configure(&mut self, _params: Option<&CodecParameters>, _options: Option<&Variant>) -> Result<()> {
@@ -218,18 +227,8 @@ impl DecoderBuilder<AudioDecoder> for OpusDecoderBuilder {
 }
 
 impl CodecBuilder<AudioDecoder> for OpusDecoderBuilder {
-    fn id(&self) -> CodecID {
-        CodecID::OPUS
-    }
-
-    fn name(&self) -> &'static str {
-        CODEC_NAME
-    }
-}
-
-impl CodecInformation for OpusDecoder {
-    fn id(&self) -> CodecID {
-        CodecID::OPUS
+    fn ids(&self) -> &[CodecID] {
+        &[CodecID::OPUS]
     }
 
     fn name(&self) -> &'static str {
